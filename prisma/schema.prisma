@@ -1,0 +1,308 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum VerificationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+enum CourseLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+}
+
+enum AssignmentStatus {
+  PENDING
+  SUBMITTED
+  GRADED
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  firstName     String
+  lastName      String
+  role          UserRole  @default(STUDENT)
+  phoneNumber   String?
+  profileImage  String?
+  isVerified    Boolean   @default(false)
+  isActive      Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  // Relations
+  teacher       Teacher?
+  student       Student?
+  refreshTokens RefreshToken[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([token])
+}
+
+model Teacher {
+  id                    String             @id @default(uuid())
+  userId                String             @unique
+  user                  User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bio                   String?
+  specialization        String[]
+  experience            Int?               // years of experience
+  education             String?
+  verificationStatus    VerificationStatus @default(PENDING)
+  verificationDocument  String?            // proof document URL
+  rating                Float?             @default(0)
+  totalReviews          Int                @default(0)
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  
+  // Relations
+  courses               Course[]
+  tutorStandSubscription TutorStandSubscription?
+  reviews               Review[]
+  earnings              Earning[]
+  payments              Payment[]          @relation("TeacherPayments")
+
+  @@index([userId])
+  @@index([verificationStatus])
+}
+
+model Student {
+  id              String       @id @default(uuid())
+  userId          String       @unique
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  grade           String?
+  school          String?
+  interests       String[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
+  // Relations
+  enrollments     Enrollment[]
+  assignments     Assignment[]
+  reviews         Review[]
+  payments        Payment[]
+
+  @@index([userId])
+}
+
+model TutorStandSubscription {
+  id                   String              @id @default(uuid())
+  teacherId            String              @unique
+  teacher              Teacher             @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  status               SubscriptionStatus  @default(INACTIVE)
+  startDate            DateTime?
+  endDate              DateTime?
+  amount               Float
+  stripeSubscriptionId String?
+  razorpayPaymentId    String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@index([teacherId])
+  @@index([status])
+}
+
+model Course {
+  id              String       @id @default(uuid())
+  title           String
+  description     String       @db.Text
+  shortDescription String?
+  teacherId       String
+  teacher         Teacher      @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  category        String
+  level           CourseLevel  @default(BEGINNER)
+  price           Float
+  duration        Int          // in hours
+  thumbnailImage  String?
+  syllabus        Json?        // structured syllabus data
+  isPublished     Boolean      @default(false)
+  rating          Float?       @default(0)
+  totalEnrollments Int         @default(0)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
+  // Relations
+  modules         Module[]
+  enrollments     Enrollment[]
+  reviews         Review[]
+
+  @@index([teacherId])
+  @@index([category])
+  @@index([isPublished])
+}
+
+model Module {
+  id          String   @id @default(uuid())
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title       String
+  description String?  @db.Text
+  order       Int
+  duration    Int      // in minutes
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relations
+  lessons     Lesson[]
+
+  @@index([courseId])
+  @@index([order])
+}
+
+model Lesson {
+  id          String   @id @default(uuid())
+  moduleId    String
+  module      Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  title       String
+  content     String   @db.Text
+  videoUrl    String?
+  resources   Json?    // array of resource URLs and types
+  order       Int
+  duration    Int      // in minutes
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([moduleId])
+  @@index([order])
+}
+
+model Enrollment {
+  id              String   @id @default(uuid())
+  studentId       String
+  student         Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId        String
+  course          Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  progress        Float    @default(0) // percentage
+  completedLessons Json?   // array of completed lesson IDs
+  enrolledAt      DateTime @default(now())
+  completedAt     DateTime?
+  
+  @@unique([studentId, courseId])
+  @@index([studentId])
+  @@index([courseId])
+}
+
+model Assignment {
+  id          String            @id @default(uuid())
+  studentId   String
+  student     Student           @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId    String
+  title       String
+  description String            @db.Text
+  dueDate     DateTime
+  status      AssignmentStatus  @default(PENDING)
+  submission  String?           // submission file URL or text
+  submittedAt DateTime?
+  grade       Float?
+  feedback    String?           @db.Text
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@index([studentId])
+  @@index([courseId])
+  @@index([status])
+}
+
+model Review {
+  id          String   @id @default(uuid())
+  studentId   String
+  student     Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  courseId    String?
+  course      Course?  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  teacherId   String?
+  teacher     Teacher? @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  rating      Int      // 1-5
+  comment     String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([studentId])
+  @@index([courseId])
+  @@index([teacherId])
+}
+
+model Payment {
+  id                String   @id @default(uuid())
+  studentId         String?
+  student           Student?  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacherId         String?
+  teacher           Teacher?  @relation("TeacherPayments", fields: [teacherId], references: [id], onDelete: Cascade)
+  amount            Float
+  currency          String   @default("INR")
+  status            String   // succeeded, pending, failed
+  stripePaymentId   String?  @unique
+  razorpayOrderId   String?  @unique
+  razorpayPaymentId String?  @unique
+  purpose           String   // course_enrollment, tutor_stand, etc.
+  metadata          Json?    // additional payment info
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([studentId])
+  @@index([teacherId])
+  @@index([status])
+  @@index([stripePaymentId])
+  @@index([razorpayOrderId])
+}
+
+model Earning {
+  id          String   @id @default(uuid())
+  teacherId   String
+  teacher     Teacher  @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  amount      Float
+  source      String   // course_sale, subscription
+  description String?
+  createdAt   DateTime @default(now())
+
+  @@index([teacherId])
+  @@index([createdAt])
+}
+
+model ContactMessage {
+  id        String   @id @default(uuid())
+  name      String
+  email     String
+  subject   String
+  message   String   @db.Text
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([isRead])
+  @@index([createdAt])
+}
