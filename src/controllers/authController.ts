@@ -76,11 +76,14 @@ export const register = async (req: AuthRequest, res: Response): Promise<void> =
       },
     });
 
-    // Send welcome email
+    // Send welcome email (don't block if it fails)
     try {
       await sendWelcomeEmail(user.email, user.firstName);
     } catch (emailError) {
-      console.error('Failed to send welcome email:', emailError);
+      // Log but don't block registration
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to send welcome email:', emailError);
+      }
     }
 
     sendSuccess(res, { user, token, refreshToken }, 'Registration successful', 201);
@@ -301,12 +304,14 @@ export const forgotPassword = async (req: AuthRequest, res: Response): Promise<v
     // Create reset link (frontend should handle this URL)
     const resetLink = `${process.env.API_URL}/api/auth/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
 
-    // Send email
+    // Send email (don't block if it fails)
     try {
       await sendPasswordResetEmail(user.email, user.firstName, resetLink);
     } catch (emailError) {
-      console.error('Failed to send password reset email:', emailError);
-      // Still consider it successful from user perspective
+      // Log but don't block password reset
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Failed to send password reset email:', emailError);
+      }
     }
 
     sendSuccess(res, null, 'If an account exists with this email, a password reset link will be sent');

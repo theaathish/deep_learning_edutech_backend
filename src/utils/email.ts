@@ -4,16 +4,13 @@ import { config } from '../config';
 const transporter = nodemailer.createTransport({
   host: config.email.host,
   port: config.email.port,
-  secure: config.email.port === 465, // true for 465, false for other ports
+  secure: false, // TLS for port 587
   auth: {
     user: config.email.user,
     pass: config.email.password,
   },
-  connectionTimeout: 10000, // 10 seconds
-  socketTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000,
-  logger: process.env.NODE_ENV === 'development',
-  debug: process.env.NODE_ENV === 'development',
+  connectionTimeout: 5000,
+  socketTimeout: 5000,
 });
 
 export interface EmailOptions {
@@ -25,12 +22,6 @@ export interface EmailOptions {
 
 export const sendEmail = async (options: EmailOptions): Promise<void> => {
   try {
-    // Verify connection before sending
-    const verified = await transporter.verify();
-    if (!verified) {
-      throw new Error('SMTP connection verification failed');
-    }
-
     await transporter.sendMail({
       from: `EduTech Platform <${config.email.user}>`,
       to: options.to,
@@ -40,16 +31,8 @@ export const sendEmail = async (options: EmailOptions): Promise<void> => {
     });
   } catch (error) {
     console.error('Error sending email:', error);
-    // Log detailed error info
-    if (error instanceof Error) {
-      console.error('Email error details:', {
-        message: error.message,
-        code: (error as any).code,
-        host: config.email.host,
-        port: config.email.port,
-      });
-    }
-    throw new Error('Failed to send email');
+    // Don't throw - email failures should not block user operations
+    // Log but continue gracefully
   }
 };
 
