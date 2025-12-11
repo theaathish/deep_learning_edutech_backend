@@ -4,7 +4,8 @@ import prisma from '../config/database';
 import { hashPassword, comparePassword } from '../utils/password';
 import { generateToken, generateRefreshToken, verifyRefreshToken } from '../utils/jwt';
 import { sendSuccess, sendError } from '../utils/response';
-import { sendWelcomeEmail } from '../utils/email';
+import { sendWelcomeEmail, sendPasswordResetEmail } from '../utils/email';
+import crypto from 'crypto';
 
 export const register = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
@@ -266,5 +267,111 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
   } catch (error) {
     console.error('Update profile error:', error);
     sendError(res, 'Failed to update profile', 500);
+  }
+};
+
+export const forgotPassword = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { email } = req.body;
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      // For security, don't reveal if email exists or not
+      sendSuccess(res, null, 'If an account exists with this email, a password reset link will be sent');
+      return;
+    }
+
+    // Generate reset token (valid for 1 hour)
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+    // Store token in database
+    await prisma.passwordReset.create({
+      data: {
+        token: tokenHash,
+        userId: user.id,
+        expiresAt,
+      },
+    });
+
+    // Create reset link (frontend should handle this URL)
+    const resetLink = `${process.env.API_URL}/api/auth/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+
+    // Send email
+    try {
+      await sendPasswordResetEmail(user.email, user.firstName, resetLink);
+    } catch (emailError) {
+      console.error('Failed to send password reset email:', emailError);
+      // Still consider it successful from user perspective
+    }
+
+    sendSuccess(res, null, 'If an account exists with this email, a password reset link will be sent');
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    sendError(res, 'Failed to process password reset request', 500);
+  }
+};
+
+export const resetPassword = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { token, email, newPassword } = req.body;
+
+    if (!token || !email || !newPassword) {
+      sendError(res, 'Token, email, and new password are required', 400);
+      return;
+    }
+
+    // Hash the token to compare with stored hash
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find user and verify reset token
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: {
+        passwordResets: {
+          where: {
+            token: tokenHash,
+            isUsed: false,
+            expiresAt: { gt: new Date() },
+          },
+        },
+      },
+    });
+
+    if (!user || user.passwordResets.length === 0) {
+      sendError(res, 'Invalid or expired password reset token', 400);
+      return;
+    }
+
+    // Hash new password
+    const hashedPassword = await hashPassword(newPassword);
+
+    // Update password and mark token as used
+    await Promise.all([
+      prisma.user.update({
+        where: { id: user.id },
+        data: { password: hashedPassword },
+      }),
+      prisma.passwordReset.update({
+        where: { id: user.passwordResets[0].id },
+        data: { isUsed: true },
+      }),
+      // Delete all other unused reset tokens for this user
+      prisma.passwordReset.deleteMany({
+        where: {
+          userId: user.id,
+          isUsed: false,
+        },
+      }),
+    ]);
+
+    sendSuccess(res, null, 'Password reset successfully. You can now login with your new password');
+  } catch (error) {
+    console.error('Reset password error:', error);
+    sendError(res, 'Failed to reset password', 500);
   }
 };

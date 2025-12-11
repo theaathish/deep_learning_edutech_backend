@@ -8,6 +8,8 @@ import {
   logout,
   getProfile,
   updateProfile,
+  forgotPassword,
+  resetPassword,
 } from '../controllers/authController';
 import { authenticate } from '../middleware/auth';
 
@@ -49,5 +51,24 @@ router.post('/logout', logout);
 router.get('/profile', authenticate, getProfile);
 
 router.put('/profile', authenticate, updateProfile);
+
+router.post(
+  '/forgot-password',
+  [body('email').isEmail().withMessage('Valid email is required'), validate],
+  forgotPassword
+);
+
+router.post(
+  '/reset-password',
+  [
+    body('token').notEmpty().withMessage('Reset token is required'),
+    body('email').isEmail().withMessage('Valid email is required'),
+    body('newPassword')
+      .isLength({ min: 6 })
+      .withMessage('Password must be at least 6 characters'),
+    validate,
+  ],
+  resetPassword
+);
 
 export default router;
