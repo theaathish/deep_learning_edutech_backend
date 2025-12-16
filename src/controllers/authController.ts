@@ -360,10 +360,17 @@ export const verifyResetToken = async (req: AuthRequest, res: Response): Promise
 
 export const resetPassword = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { token, email, newPassword } = req.body;
+    // Accept both newPassword and password for compatibility with frontend
+    const { token, email, newPassword: newPasswordRaw, password: passwordRaw } = req.body;
+    const newPassword = newPasswordRaw || passwordRaw;
 
-    if (!token || !email || !newPassword) {
-      sendError(res, 'Token, email, and new password are required', 400);
+    if (!token || !email) {
+      sendError(res, 'Token and email are required', 400);
+      return;
+    }
+
+    if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 6) {
+      sendError(res, 'New password is required and must be at least 6 characters', 400);
       return;
     }
 
