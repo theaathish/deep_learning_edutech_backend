@@ -301,8 +301,9 @@ export const forgotPassword = async (req: AuthRequest, res: Response): Promise<v
       },
     });
 
-    // Create reset link (frontend should handle this URL)
-    const resetLink = `${process.env.API_URL}/api/auth/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
+    // Create reset link (frontend URL)
+    const frontendUrl = process.env.FRONTEND_URL || 'https://deeplearningedutech.com';
+    const resetLink = `${frontendUrl}/reset-password?token=${resetToken}&email=${encodeURIComponent(user.email)}`;
 
     // Send email (don't block if it fails)
     try {
