@@ -7,6 +7,7 @@ SMTP Readiness Test for VM (Gmail)
 
 Usage:
   EMAIL_USER="your@gmail.com" EMAIL_PASSWORD="your_app_password" node scripts/test-smtp.js [recipient_email]
+  EMAIL_USER="tagverse.iio@gmail.com" EMAIL_PASSWORD="vckr qzcr uilw sfdp" node scripts/test-smtp.js aathishpirate@gmail.com
 */
 
 const nodemailer = require('nodemailer');

@@ -1,17 +1,24 @@
 import nodemailer from 'nodemailer';
+import { Resend } from 'resend';
 import { config } from '../config';
 
-const transporter = nodemailer.createTransport({
-  host: config.email.host,
-  port: config.email.port,
-  secure: false, // TLS for port 587
-  auth: {
-    user: config.email.user,
-    pass: config.email.password,
-  },
-  connectionTimeout: 5000,
-  socketTimeout: 5000,
-});
+const resendApiKey = config.email.resendApiKey;
+const resendFrom = config.email.from;
+const resendClient = resendApiKey ? new Resend(resendApiKey) : null;
+
+const transporter = config.email.user
+  ? nodemailer.createTransport({
+      host: config.email.host,
+      port: config.email.port,
+      secure: false, // TLS for port 587
+      auth: {
+        user: config.email.user,
+        pass: config.email.password,
+      },
+      connectionTimeout: 5000,
+      socketTimeout: 5000,
+    })
+  : null;
 
 export interface EmailOptions {
   to: string;
@@ -21,6 +28,28 @@ export interface EmailOptions {
 }
 
 export const sendEmail = async (options: EmailOptions): Promise<void> => {
+  // Try Resend first if configured
+  if (resendClient && resendFrom) {
+    try {
+      await resendClient.emails.send({
+        from: resendFrom,
+        to: options.to,
+        subject: options.subject,
+        html: options.html,
+        text: options.text,
+      });
+      return;
+    } catch (error) {
+      console.error('Error sending email via Resend:', error);
+      // fall through to SMTP fallback
+    }
+  }
+
+  if (!transporter) {
+    console.error('Email not sent: SMTP not configured and Resend failed or missing.');
+    return;
+  }
+
   try {
     await transporter.sendMail({
       from: `EduTech Platform <${config.email.user}>`,

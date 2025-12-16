@@ -31,6 +31,8 @@ export const config = {
     port: parseInt(process.env.EMAIL_PORT || '587', 10),
     user: process.env.EMAIL_USER,
     password: process.env.EMAIL_PASSWORD,
+    from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+    resendApiKey: process.env.RESEND_API_KEY,
   },
   
   razorpay: {
