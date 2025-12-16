@@ -321,6 +321,42 @@ export const forgotPassword = async (req: AuthRequest, res: Response): Promise<v
   }
 };
 
+export const verifyResetToken = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { token, email } = req.query as { token?: string; email?: string };
+
+    if (!token || !email) {
+      sendError(res, 'Token and email are required', 400);
+      return;
+    }
+
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+      include: {
+        passwordResets: {
+          where: {
+            token: tokenHash,
+            isUsed: false,
+            expiresAt: { gt: new Date() },
+          },
+        },
+      },
+    });
+
+    if (!user || user.passwordResets.length === 0) {
+      sendError(res, 'Invalid or expired password reset token', 400);
+      return;
+    }
+
+    sendSuccess(res, null, 'Password reset token is valid');
+  } catch (error) {
+    console.error('Verify reset token error:', error);
+    sendError(res, 'Failed to verify token', 500);
+  }
+};
+
 export const resetPassword = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { token, email, newPassword } = req.body;

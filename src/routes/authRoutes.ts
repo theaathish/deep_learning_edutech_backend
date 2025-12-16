@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { body } from 'express-validator';
+import { body, query } from 'express-validator';
 import { validate } from '../middleware/validate';
 import {
   register,
@@ -9,6 +9,7 @@ import {
   getProfile,
   updateProfile,
   forgotPassword,
+  verifyResetToken,
   resetPassword,
 } from '../controllers/authController';
 import { authenticate } from '../middleware/auth';
@@ -51,6 +52,16 @@ router.post('/logout', logout);
 router.get('/profile', authenticate, getProfile);
 
 router.put('/profile', authenticate, updateProfile);
+
+router.get(
+  '/reset-password',
+  [
+    query('token').notEmpty().withMessage('Token is required'),
+    query('email').isEmail().withMessage('Valid email is required'),
+    validate,
+  ],
+  verifyResetToken
+);
 
 router.post(
   '/forgot-password',
