@@ -7,6 +7,7 @@ import prisma from './config/database';
 
 // Import routes
 import authRoutes from './routes/authRoutes';
+import adminRoutes from './routes/adminRoutes';
 import courseRoutes from './routes/courseRoutes';
 import enrollmentRoutes from './routes/enrollmentRoutes';
 import teacherRoutes from './routes/teacherRoutes';
@@ -96,6 +97,7 @@ app.get('/health', async (_req: Request, res: Response) => {
 
 // API Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/courses', courseRoutes);
 app.use('/api/enrollments', enrollmentRoutes);
 app.use('/api/teacher', teacherRoutes);

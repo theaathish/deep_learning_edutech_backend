@@ -151,6 +151,59 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
   }
 };
 
+export const loginAdmin = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { email, password } = req.body;
+
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user || user.role !== 'ADMIN') {
+      sendError(res, 'Invalid credentials', 401);
+      return;
+    }
+
+    if (!user.isActive) {
+      sendError(res, 'Account is deactivated', 403);
+      return;
+    }
+
+    const isPasswordValid = await comparePassword(password, user.password);
+    if (!isPasswordValid) {
+      sendError(res, 'Invalid credentials', 401);
+      return;
+    }
+
+    const token = generateToken({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    const refreshToken = generateRefreshToken({
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    });
+
+    await prisma.refreshToken.create({
+      data: {
+        token: refreshToken,
+        userId: user.id,
+        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      },
+    });
+
+    const { password: _pw, ...userWithoutPassword } = user;
+
+    sendSuccess(res, { user: userWithoutPassword, token, refreshToken }, 'Login successful');
+  } catch (error) {
+    console.error('Admin login error:', error);
+    sendError(res, 'Login failed', 500);
+  }
+};
+
 export const refreshAccessToken = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { refreshToken } = req.body;
