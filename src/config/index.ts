@@ -35,11 +35,18 @@ export const config = {
     resendApiKey: process.env.RESEND_API_KEY,
   },
   
-  razorpay: {
-    keyId: process.env.RAZORPAY_KEY_ID || '',
-    secret: process.env.RAZORPAY_SECRET || '',
-    webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || '',
-  },
+  razorpay: (() => {
+    const keyId = process.env.RAZORPAY_KEY_ID;
+    const secret = process.env.RAZORPAY_SECRET;
+    if (!keyId || !secret) {
+      throw new Error('Missing RAZORPAY_KEY_ID or RAZORPAY_SECRET environment variables.');
+    }
+    return {
+      keyId: keyId,
+      secret: secret,
+      webhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || '',
+    };
+  })(),
   
   upload: {
     maxFileSize: parseInt(process.env.MAX_FILE_SIZE || '104857600', 10), // 100MB default
