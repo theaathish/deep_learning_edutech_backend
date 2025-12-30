@@ -8,6 +8,8 @@ import {
   verifyPayment,
   createSubscriptionOrder,
   verifySubscriptionPayment,
+  createVerificationOrder,
+  verifyVerificationPayment,
   getPaymentHistory,
   handleWebhook,
 } from '../controllers/paymentController';
@@ -37,6 +39,27 @@ router.post(
     validate,
   ],
   verifyPayment
+);
+
+// Teacher Verification Fee
+router.post(
+  '/verification/create-order',
+  authenticate,
+  authorize('TEACHER'),
+  createVerificationOrder
+);
+
+router.post(
+  '/verification/verify',
+  authenticate,
+  authorize('TEACHER'),
+  [
+    body('razorpay_order_id').notEmpty().withMessage('Order ID is required'),
+    body('razorpay_payment_id').notEmpty().withMessage('Payment ID is required'),
+    body('razorpay_signature').notEmpty().withMessage('Signature is required'),
+    validate,
+  ],
+  verifyVerificationPayment
 );
 
 // Tutor Stand subscription payment

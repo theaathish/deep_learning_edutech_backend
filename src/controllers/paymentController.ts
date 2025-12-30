@@ -318,6 +318,134 @@ export const verifySubscriptionPayment = async (req: AuthRequest, res: Response)
   }
 };
 
+// Create Teacher Verification Order
+export const createVerificationOrder = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      sendError(res, 'User not authenticated', 401);
+      return;
+    }
+
+    const teacher = await prisma.teacher.findUnique({
+      where: { userId: req.user.id },
+    });
+
+    if (!teacher) {
+      sendError(res, 'Teacher profile not found', 404);
+      return;
+    }
+
+    if (teacher.verificationStatus === 'APPROVED') {
+      sendError(res, 'Teacher is already verified', 400);
+      return;
+    }
+
+    const amount = 299; // Verification fee in INR
+
+    // Create Razorpay order
+    const timestamp = Date.now().toString().slice(-8);
+    const order = await razorpay.orders.create({
+      amount: amount * 100, // Convert to paise
+      currency: 'INR',
+      receipt: `tv_${timestamp}`,
+      notes: {
+        teacherId: teacher.id,
+        purpose: 'teacher_verification',
+      },
+    });
+
+    // Save pending payment
+    await prisma.payment.create({
+      data: {
+        teacherId: teacher.id,
+        amount,
+        currency: 'INR',
+        status: 'pending',
+        razorpayOrderId: order.id,
+        purpose: 'teacher_verification',
+        metadata: { teacherId: teacher.id },
+      },
+    });
+
+    sendSuccess(res, {
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency,
+      keyId: config.razorpay.keyId,
+    }, 'Verification order created');
+  } catch (error) {
+    console.error('Create verification order error:', error);
+    sendError(res, 'Failed to create verification order', 500);
+  }
+};
+
+// Verify Teacher Verification Payment
+export const verifyVerificationPayment = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      sendError(res, 'User not authenticated', 401);
+      return;
+    }
+
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+    // Verify signature
+    const body = razorpay_order_id + '|' + razorpay_payment_id;
+    const expectedSignature = crypto
+      .createHmac('sha256', config.razorpay.secret)
+      .update(body)
+      .digest('hex');
+
+    if (expectedSignature !== razorpay_signature) {
+      sendError(res, 'Invalid payment signature', 400);
+      return;
+    }
+
+    const teacher = await prisma.teacher.findUnique({
+      where: { userId: req.user.id },
+    });
+
+    if (!teacher) {
+      sendError(res, 'Teacher profile not found', 404);
+      return;
+    }
+
+    // Find payment
+    const payment = await prisma.payment.findFirst({
+      where: { razorpayOrderId: razorpay_order_id },
+    });
+
+    if (!payment) {
+      sendError(res, 'Payment not found', 404);
+      return;
+    }
+
+    // Update payment status
+    await prisma.payment.update({
+      where: { id: payment.id },
+      data: {
+        status: 'succeeded',
+        razorpayPaymentId: razorpay_payment_id,
+      },
+    });
+
+    // Instant verification
+    await prisma.teacher.update({
+      where: { id: teacher.id },
+      data: {
+        verificationStatus: 'APPROVED',
+      },
+    });
+
+    sendSuccess(res, {
+      verificationStatus: 'APPROVED',
+    }, 'Teacher verified successfully');
+  } catch (error) {
+    console.error('Verify verification payment error:', error);
+    sendError(res, 'Failed to verify verification payment', 500);
+  }
+};
+
 // Get payment history
 export const getPaymentHistory = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
