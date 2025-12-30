@@ -35,6 +35,7 @@ export const sendError = (
   const response: ApiResponse = {
     success: false,
     error,
+    message: error,
   };
   res.status(statusCode).json(response);
 };

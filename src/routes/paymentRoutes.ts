@@ -45,8 +45,8 @@ router.post(
   authenticate,
   authorize('TEACHER'),
   [
-    body('plan').isIn(['monthly', 'yearly']).withMessage('Plan must be monthly or yearly'),
-    body('amount').isFloat({ min: 0 }).withMessage('Valid amount is required'),
+    body('plan').toLowerCase().isIn(['monthly', 'yearly']).withMessage('Plan must be monthly or yearly'),
+    body('amount').toFloat().isFloat({ min: 0 }).withMessage('Valid amount is required'),
     validate,
   ],
   createSubscriptionOrder
